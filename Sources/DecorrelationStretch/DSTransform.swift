@@ -7,9 +7,9 @@ public enum DSTargetVariance: Equatable, Sendable {
     /// broadly believable.
     case preserveOriginal
     /// `Σ_T = fraction · nominalScale · I`. Every axis is driven to the same
-    /// standard deviation, which is what produces the dramatic DStretch look.
-    /// `fraction` is a proportion of the space's nominal extent; DStretch's default
-    /// "scale" of 15 in 0...255 units corresponds to roughly 0.059.
+    /// standard deviation, which is what produces the dramatic, heavily saturated look.
+    /// `fraction` is a proportion of the space's nominal extent; 0.059 corresponds to a
+    /// standard deviation of 15 in 0...255 units.
     case uniform(fraction: Float)
 }
 

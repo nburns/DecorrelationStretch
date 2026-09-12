@@ -21,8 +21,8 @@ public struct DSConfiguration {
     public var temporalSmoothing: Float = 0.85
 
     /// Restrict the statistics to a sub-rectangle while still stretching the whole
-    /// frame. This is DStretch's selection feature and it matters a lot in practice:
-    /// excluding sky, foliage, or shadow stops them from consuming the variance budget.
+    /// frame. This matters a lot in practice: excluding sky, foliage, or shadow stops
+    /// them from consuming the variance budget.
     public var regionOfInterest: MTLRegion?
 
     public init() {}

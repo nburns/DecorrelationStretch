@@ -13,7 +13,7 @@ public enum DSColorSpaceFamily: Int32, Sendable, CaseIterable {
 /// A base space plus per-axis multipliers applied before the covariance is measured
 /// and undone after the stretch.
 ///
-/// This mirrors DStretch's `YXX` / `LXX` custom-colorspace mechanism. Scaling an axis
+/// Scaling an axis
 /// changes the covariance, which changes the eigenvectors, which changes the rotation
 /// the stretch is performed in — so the weights genuinely alter the output rather than
 /// merely rescaling it.
@@ -61,8 +61,8 @@ public extension DSColorSpace {
     static let yuv = DSColorSpace(family: .yuv)
     static let lab = DSColorSpace(family: .lab)
 
-    /// Luminance held back so the stretch spends its range on chroma. General-purpose
-    /// starting point, closest in spirit to DStretch's `YDS`.
+    /// Luminance held back so the stretch spends its range on chroma. A good
+    /// general-purpose starting point.
     static let chromaBoost = DSColorSpace(family: .yuv, weights: SIMD3(0.5, 1.5, 1.5))
 
     /// Weighted toward the a* (green-red) axis, for red and ochre pigment.

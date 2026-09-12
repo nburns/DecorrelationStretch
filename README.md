@@ -10,8 +10,8 @@ A real-time decorrelation stretch filter for macOS and iOS, in Metal.
 Decorrelation stretch removes the correlation between colour channels, then re-inflates
 each decorrelated axis to a target variance. It is not a contrast stretch — it remaps
 the colours themselves, so near-identical hues separate dramatically. Developed at NASA
-JPL in 1978 for satellite imagery, and the basis of DStretch, the standard tool for
-reading faded rock art.
+JPL in 1978 for satellite imagery, and since adopted as the standard way to read faded
+rock art and wall painting.
 
 ## Why it runs in real time
 
@@ -64,7 +64,7 @@ let engine = try DSEngine(device: device)
 
 var config = DSConfiguration()
 config.colorSpace = .redEmphasis
-config.target = .uniform(fraction: 0.0588)   // DStretch's "scale 15", in 0...255 units
+config.target = .uniform(fraction: 0.0588)   // sigma 15 in 0...255 units
 engine.configuration = config
 
 let stretched = try engine.process(image: sourceCGImage, device: device, queue: queue)
@@ -112,9 +112,8 @@ texture needs `.shaderWrite` usage — set `metalLayer.framebufferOnly = false`.
 | `temporalSmoothing` | `0.85` | damps matrix changes so colours don't pulse as a camera pans |
 
 **`regionOfInterest` matters more than it looks.** Sky, foliage, and shadow otherwise
-consume the variance budget. Restricting statistics to the panel and stretching the whole
-frame is DStretch's selection feature, and it is often the difference between a useful
-result and mud.
+consume the variance budget. Restricting statistics to the panel while stretching the
+whole frame is often the difference between a useful result and mud.
 
 ### Colour spaces
 
@@ -123,9 +122,8 @@ before the covariance is measured and undone after. Scaling an axis changes the
 covariance, which changes the eigenvectors, which changes the rotation the stretch
 happens in — so the weights genuinely alter the output rather than merely rescaling it.
 
-This mirrors DStretch's `YXX`/`LXX` custom-colorspace panel. The presets below are
-starting points, **not** Harman's coefficients for `YDS`/`LRE`/`YBK` — those are not
-public. Expect to dial in your own.
+The presets below are independent starting points, arrived at by experiment. Expect to
+dial in your own for your material.
 
 | preset | base | for |
 |---|---|---|
@@ -285,26 +283,10 @@ actually did the work are:
 - **Ronald Alley at NASA JPL** replaced the multi-pass formulation with a single matrix
   multiply, making it both faster and more accurate by removing the intermediate images
   that introduced rounding error. He led the ASTER AST06 decorrelation stretch product.
-- **Jon Harman** wrote DStretch, the ImageJ plugin that made the technique the standard
-  tool for reading faded rock art, and worked out the custom colour spaces that make it
-  effective on pigment. The weighted-base-space parameterisation this library exposes
-  follows the mechanism he documents. His specific tuned coefficients are his own work
-  and are **not** reproduced here — the presets in this library are independent starting
-  points.
 - **Elisa Crabu, Federica Pes and Giuseppe Rodriguez** (2025) analysed the numerical
   failure modes of the standard algorithm. Their paper is why this implementation clamps
   near-zero eigenvalues instead of using the pseudo-inverse, and why moments are
   accumulated about a reference centre.
-
-## Prior art
-
-Other software implementing this technique, worth knowing about:
-
-- **DStretch** — ImageJ plugin by Jon Harman, plus `iDStretch` and `aDStretch` for mobile.
-  The reference implementation for rock art work.
-- **Rock Art Enhancer** — BinaryEarth (Anthony Dunk), iOS and macOS, including a live
-  video mode.
-- **MATLAB** `decorrstretch`, and **ENVI**'s Decorrelation Stretch tool.
 
 ## License
 
@@ -318,6 +300,5 @@ saying how it was produced.
 
 - [NASA Spinoff: Technique for Manipulating Satellite Photos Now Reveals Ancient Images](https://spinoff.nasa.gov/Manipulating_Satellite_Photos_Now_Reveals_Ancient_Images)
 - [ASTER AST06 Decorrelation Stretch (Ron Alley, JPL)](https://asterweb.jpl.nasa.gov/content/03_data/01_Data_Products/d-stretch.pdf)
-- [DStretch algorithm description (Jon Harman)](http://www.dstretch.com/AlgorithmDescription.html)
 - [Crabu, Pes & Rodriguez, *Numerical Methods for Decorrelation Stretch*, Mathematics 2025](https://doi.org/10.3390/math13203297)
 - [MATLAB `decorrstretch`](https://www.mathworks.com/help/images/ref/decorrstretch.html)
