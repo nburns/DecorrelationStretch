@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  library:
+    name: Library (SPM)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift --version
+      - name: Build
+        run: swift build
+      # The GPU tests skip themselves when no Metal device is present, so this stays
+      # green on runners without one while still covering the solver everywhere.
+      - name: Test
+        run: swift test
+
+  app:
+    name: App (Xcode)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        run: xcodegen generate
+      - name: Build
+        run: |
+          xcodebuild -project Decorrelate.xcodeproj \
+            -scheme Decorrelate \
+            -configuration Debug \
+            -derivedDataPath .build/xcode \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+  tools:
+    name: Tools (Python)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install numpy scipy pillow
+      - name: Byte-compile
+        run: python -m compileall -q Tools
