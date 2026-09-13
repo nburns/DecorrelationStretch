@@ -29,6 +29,7 @@ final class RenderCoordinator: NSObject, MTKViewDelegate {
     private let stateLock = NSLock()
     private var configuration = DSConfiguration()
     private var mode: SourceMode = .image
+    private var cameraID: String?
 
     private var imageTexture: MTLTexture?
     private var sourceImage: CGImage?
@@ -43,6 +44,7 @@ final class RenderCoordinator: NSObject, MTKViewDelegate {
     var onDiagnostics: ((Diagnostics) -> Void)?
     var onStatus: ((String) -> Void)?
     var onSourceSize: ((CGSize) -> Void)?
+    var onDevices: (([CameraDevice]) -> Void)?
 
     private struct DisplayUniforms {
         var scale: SIMD2<Float>
@@ -96,31 +98,46 @@ final class RenderCoordinator: NSObject, MTKViewDelegate {
             self.pendingPixelBuffer = buffer
             self.frameLock.unlock()
         }
-        camera.onError = { [weak self] message in
+        camera.onStatus = { [weak self] message in
             self?.onStatus?(message)
+        }
+        camera.onDevices = { [weak self] devices in
+            self?.onDevices?(devices)
         }
     }
 
     // MARK: - Input
 
-    func update(configuration: DSConfiguration, mode: SourceMode) {
+    func update(configuration: DSConfiguration, mode: SourceMode, cameraID: String?) {
         stateLock.lock()
         self.configuration = configuration
         let modeChanged = self.mode != mode
+        let cameraChanged = self.cameraID != cameraID
         self.mode = mode
+        self.cameraID = cameraID
         stateLock.unlock()
 
         engine.configuration = configuration
 
         if modeChanged {
             if mode == .camera {
-                camera.start()
+                camera.start(deviceID: cameraID)
             } else {
                 camera.stop()
                 frameLock.lock(); pendingPixelBuffer = nil; frameLock.unlock()
             }
             engine.reset()
+        } else if cameraChanged, mode == .camera, let cameraID {
+            // A different sensor means different colour statistics, so the matrix has to
+            // be measured again rather than carried over from the previous camera.
+            camera.select(deviceID: cameraID)
+            engine.reset()
         }
+    }
+
+    /// Populate the picker before the camera has ever been started.
+    func refreshCameraList() {
+        camera.refreshDevices()
     }
 
     func loadImage(url: URL) {

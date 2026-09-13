@@ -66,6 +66,7 @@ struct ContentView: View {
         }
         .onChange(of: model.configurationSignature) { _ in push() }
         .onChange(of: model.sourceMode) { _ in push() }
+        .onChange(of: model.selectedCameraID) { _ in push() }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             guard let provider = providers.first else { return false }
             _ = provider.loadObject(ofClass: URL.self) { url, _ in
@@ -143,9 +144,12 @@ struct ContentView: View {
                                        regionOfInterest: $model.regionOfInterest)
             } else {
                 VStack(spacing: 10) {
-                    Image(systemName: "photo.on.rectangle.angled")
+                    Image(systemName: model.sourceMode == .camera
+                          ? "camera.metering.unknown" : "photo.on.rectangle.angled")
                         .font(.system(size: 40, weight: .thin))
-                    Text("Open an image or switch to the camera")
+                    Text(model.sourceMode == .camera
+                         ? "Waiting for the camera…"
+                         : "Open an image, or drag one in")
                         .font(.callout)
                         .multilineTextAlignment(.center)
                 }
@@ -169,11 +173,22 @@ struct ContentView: View {
         host.coordinator.onSourceSize = { size in
             if model.sourceSize != size { model.sourceSize = size }
         }
+        host.coordinator.onDevices = { devices in
+            model.cameras = devices
+            // Adopt the system default the first time, so the picker shows a real
+            // selection rather than an empty one.
+            if model.selectedCameraID == nil || !devices.contains(where: { $0.id == model.selectedCameraID }) {
+                model.selectedCameraID = devices.first?.id
+            }
+        }
+        host.coordinator.refreshCameraList()
         push()
     }
 
     private func push() {
-        host.coordinator.update(configuration: model.configuration, mode: model.sourceMode)
+        host.coordinator.update(configuration: model.configuration,
+                                mode: model.sourceMode,
+                                cameraID: model.selectedCameraID)
         revision &+= 1
     }
 

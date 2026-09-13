@@ -48,7 +48,9 @@ final class FilterModel: ObservableObject {
     @Published var regionOfInterest: CGRect?
 
     // Source
-    @Published var sourceMode: SourceMode = .image
+    @Published var sourceMode: SourceMode = .camera
+    @Published var cameras: [CameraDevice] = []
+    @Published var selectedCameraID: String?
     @Published var imageURL: URL?
     @Published var sourceSize: CGSize = .zero
 

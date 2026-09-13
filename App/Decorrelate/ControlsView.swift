@@ -40,6 +40,22 @@ struct ControlsView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
 
+            if model.sourceMode == .camera, model.cameras.count > 1 {
+                Picker("Camera", selection: Binding(
+                    get: { model.selectedCameraID ?? model.cameras.first?.id ?? "" },
+                    set: { model.selectedCameraID = $0 }
+                )) {
+                    ForEach(model.cameras) { Text($0.name).tag($0.id) }
+                }
+                .pickerStyle(.menu)
+            } else if model.sourceMode == .camera, model.cameras.count == 1 {
+                HStack {
+                    Text("Camera").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Text(model.cameras[0].name).font(.caption)
+                }
+            }
+
             HStack {
                 Button("Open Image…", action: onOpenImage)
                 Spacer()
