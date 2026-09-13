@@ -1,5 +1,6 @@
 import SwiftUI
 import MetalKit
+import DecorrelationStretch
 
 extension MTKView {
     /// `needsDisplay` is a settable AppKit property; UIKit wants a method call.
@@ -60,6 +61,7 @@ extension MetalPreview: UIViewRepresentable {
 /// source-image pixels, since that is what the analysis pass needs.
 struct RegionSelectionOverlay: View {
     let imageSize: CGSize
+    let fill: Bool
     @Binding var regionOfInterest: CGRect?
 
     @State private var dragStart: CGPoint?
@@ -67,7 +69,9 @@ struct RegionSelectionOverlay: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let fitted = PreviewGeometry.fittedRect(imageSize: imageSize, in: geometry.size)
+            let fitted = DSPreviewGeometry.contentRect(content: imageSize,
+                                                       viewport: geometry.size,
+                                                       mode: fill ? .fill : .fit)
             ZStack(alignment: .topLeading) {
                 Color.clear.contentShape(Rectangle())
                 if let rect = liveRect(in: fitted) {

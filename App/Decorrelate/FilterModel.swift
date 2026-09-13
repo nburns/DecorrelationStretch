@@ -51,6 +51,13 @@ final class FilterModel: ObservableObject {
     @Published var sourceMode: SourceMode = .camera
     @Published var cameras: [CameraDevice] = []
     @Published var selectedCameraID: String?
+    /// Extra quarter turns on the live feed, for devices the rotation coordinator's
+    /// assumptions do not fit.
+    @Published var rotationOffset = 0
+    /// Fill the view and crop, rather than fit inside it and letterbox. A live camera
+    /// feed should fill the way the system camera does; a still image should not be
+    /// cropped, so this follows the source unless overridden.
+    @Published var fillPreview = true
     @Published var imageURL: URL?
     @Published var sourceSize: CGSize = .zero
 

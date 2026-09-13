@@ -13,11 +13,9 @@ import DecorrelationStretch
 enum HeadlessMode {
     private(set) static var preloadURL: URL?
 
-    #if !os(macOS)
-    /// iOS has no command line to read, so this is a deliberate no-op rather than a
-    /// conditional at the call site.
-    static func runIfRequested() {}
-    #else
+    /// `--open` works on both platforms - on iOS it is reachable through the scheme's
+    /// launch arguments, which is the only way to preload an image without tapping
+    /// through the importer. `--process` is macOS-only; there is no shell to return to.
     static func runIfRequested() {
         let arguments = CommandLine.arguments
 
@@ -25,6 +23,7 @@ enum HeadlessMode {
             preloadURL = URL(fileURLWithPath: arguments[index + 1]).standardizedFileURL
         }
 
+        #if os(macOS)
         guard let index = arguments.firstIndex(of: "--process"), arguments.count > index + 2 else {
             return
         }
@@ -45,7 +44,10 @@ enum HeadlessMode {
         }
 
         exit(process(input: input, output: output, space: space, fraction: fraction) ? 0 : 1)
+        #endif
     }
+
+    #if os(macOS)
 
     private static func process(input: URL, output: URL,
                                 space: DSColorSpace, fraction: Float) -> Bool {

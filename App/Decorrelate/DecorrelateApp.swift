@@ -65,8 +65,15 @@ struct ContentView: View {
             if let url = HeadlessMode.preloadURL { load(url) }
         }
         .onChange(of: model.configurationSignature) { _ in push() }
-        .onChange(of: model.sourceMode) { _ in push() }
+        .onChange(of: model.sourceMode) { mode in
+            // A camera feed should fill; a still image should be shown whole. Set the
+            // sensible default on each switch, leaving the toggle free to override it.
+            model.fillPreview = (mode == .camera)
+            push()
+        }
         .onChange(of: model.selectedCameraID) { _ in push() }
+        .onChange(of: model.rotationOffset) { _ in push() }
+        .onChange(of: model.fillPreview) { _ in push() }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             guard let provider = providers.first else { return false }
             _ = provider.loadObject(ofClass: URL.self) { url, _ in
@@ -141,6 +148,7 @@ struct ContentView: View {
                          revision: revision)
             if model.sourceSize != .zero {
                 RegionSelectionOverlay(imageSize: model.sourceSize,
+                                       fill: model.fillPreview,
                                        regionOfInterest: $model.regionOfInterest)
             } else {
                 VStack(spacing: 10) {
@@ -195,7 +203,9 @@ struct ContentView: View {
     private func push() {
         host.coordinator.update(configuration: model.configuration,
                                 mode: model.sourceMode,
-                                cameraID: model.selectedCameraID)
+                                cameraID: model.selectedCameraID,
+                                rotationOffset: model.rotationOffset,
+                                fillPreview: model.fillPreview)
         revision &+= 1
     }
 

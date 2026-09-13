@@ -32,7 +32,15 @@ final class CameraSource: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
     /// coordinator also accounts for the sensor's own mounting per device.
     private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
     private var rotationObservation: NSKeyValueObservation?
+    /// The layer the frames are drawn into. The coordinator needs it to account for a
+    /// layer that rotates with the interface; without it the angle it reports is relative
+    /// to the device instead, which is off by a quarter turn.
+    private weak var previewLayer: CALayer?
     #endif
+
+    /// Extra quarter turns applied on top of the coordinator's angle, for the cases its
+    /// assumptions do not cover.
+    private var rotationOffset: CGFloat = 0
 
     var onFrame: ((CVPixelBuffer) -> Void)?
     /// Carries both failures and plain status, e.g. which device is now live.
@@ -99,6 +107,29 @@ final class CameraSource: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
                 self.configureAndRun()
             }
         }
+    }
+
+    #if os(iOS)
+    /// Called once the Metal view exists. Re-observes if a device is already live, since
+    /// the coordinator has to be rebuilt to pick the layer up.
+    func attach(previewLayer layer: CALayer) {
+        guard previewLayer !== layer else { return }
+        previewLayer = layer
+        queue.async { [weak self] in
+            guard let self, let device = self.currentInput?.device else { return }
+            DispatchQueue.main.async { self.observeRotation(for: device) }
+        }
+    }
+    #endif
+
+    func setRotationOffset(_ degrees: Int) {
+        let normalised = CGFloat(((degrees % 360) + 360) % 360)
+        angleLock.lock()
+        let changed = rotationOffset != normalised
+        rotationOffset = normalised
+        angleLock.unlock()
+        guard changed else { return }
+        queue.async { [weak self] in self?.applyRotation() }
     }
 
     /// Switches device without tearing the session down, so the preview does not blink.
@@ -187,7 +218,7 @@ final class CameraSource: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
         #if os(iOS)
         guard let connection = output.connection(with: .video) else { return }
         angleLock.lock()
-        let angle = cachedAngle
+        let angle = (cachedAngle + rotationOffset).truncatingRemainder(dividingBy: 360)
         angleLock.unlock()
         if connection.isVideoRotationAngleSupported(angle) {
             connection.videoRotationAngle = angle
@@ -200,7 +231,8 @@ final class CameraSource: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
     /// upright while the interface rotates with the device, which is exactly this case.
     /// Observed rather than polled, so rotation is followed without a notification dance.
     private func observeRotation(for device: AVCaptureDevice) {
-        let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: nil)
+        let coordinator = AVCaptureDevice.RotationCoordinator(device: device,
+                                                              previewLayer: previewLayer)
         rotationCoordinator = coordinator
         rotationObservation = coordinator.observe(
             \.videoRotationAngleForHorizonLevelPreview, options: [.initial, .new]

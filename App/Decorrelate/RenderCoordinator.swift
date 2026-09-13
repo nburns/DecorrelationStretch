@@ -30,6 +30,8 @@ final class RenderCoordinator: NSObject, MTKViewDelegate {
     private var configuration = DSConfiguration()
     private var mode: SourceMode = .image
     private var cameraID: String?
+    private var rotationOffset = 0
+    private var fillPreview = false
 
     private var imageTexture: MTLTexture?
     private var sourceImage: CGImage?
@@ -108,14 +110,20 @@ final class RenderCoordinator: NSObject, MTKViewDelegate {
 
     // MARK: - Input
 
-    func update(configuration: DSConfiguration, mode: SourceMode, cameraID: String?) {
+    func update(configuration: DSConfiguration, mode: SourceMode, cameraID: String?,
+                rotationOffset: Int = 0, fillPreview: Bool = false) {
         stateLock.lock()
+        self.fillPreview = fillPreview
         self.configuration = configuration
         let modeChanged = self.mode != mode
         let cameraChanged = self.cameraID != cameraID
+        let offsetChanged = self.rotationOffset != rotationOffset
         self.mode = mode
         self.cameraID = cameraID
+        self.rotationOffset = rotationOffset
         stateLock.unlock()
+
+        if offsetChanged { camera.setRotationOffset(rotationOffset) }
 
         engine.configuration = configuration
 
@@ -205,6 +213,7 @@ final class RenderCoordinator: NSObject, MTKViewDelegate {
         stateLock.lock()
         let mode = self.mode
         let imageTexture = self.imageTexture
+        let fill = self.fillPreview
         stateLock.unlock()
 
         let source: MTLTexture?
@@ -213,7 +222,14 @@ final class RenderCoordinator: NSObject, MTKViewDelegate {
         case .camera: source = currentCameraTexture()
         }
 
-        hostView = view
+        if hostView !== view {
+            hostView = view
+            #if os(iOS)
+            // The rotation coordinator needs the layer the frames land in; it only exists
+            // once the view has been made, which is after the session may have started.
+            camera.attach(previewLayer: view.layer)
+            #endif
+        }
 
         guard let source,
               let passDescriptor = view.currentRenderPassDescriptor,
@@ -241,9 +257,10 @@ final class RenderCoordinator: NSObject, MTKViewDelegate {
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) else { return }
         encoder.label = "Display"
         encoder.setRenderPipelineState(displayPipeline)
-        var uniforms = DisplayUniforms(scale: aspectFitScale(
-            imageSize: CGSize(width: source.width, height: source.height),
-            viewSize: view.drawableSize))
+        var uniforms = DisplayUniforms(scale: DSPreviewGeometry.quadScale(
+            content: CGSize(width: target.width, height: target.height),
+            viewport: view.drawableSize,
+            mode: fill ? .fill : .fit))
         encoder.setVertexBytes(&uniforms, length: MemoryLayout<DisplayUniforms>.stride, index: 0)
         encoder.setFragmentTexture(target, index: 0)
         encoder.setFragmentSamplerState(sampler, index: 0)
@@ -292,29 +309,5 @@ final class RenderCoordinator: NSObject, MTKViewDelegate {
         return intermediate
     }
 
-    /// Shrinks the quad along whichever axis would otherwise overflow, letterboxing the
-    /// rest. `PreviewGeometry.fittedRect` performs the same fit in view coordinates so
-    /// that region-of-interest dragging lines up with what is drawn.
-    private func aspectFitScale(imageSize: CGSize, viewSize: CGSize) -> SIMD2<Float> {
-        guard imageSize.width > 0, imageSize.height > 0,
-              viewSize.width > 0, viewSize.height > 0 else { return SIMD2(1, 1) }
-        let imageAspect = imageSize.width / imageSize.height
-        let viewAspect = viewSize.width / viewSize.height
-        return imageAspect > viewAspect
-            ? SIMD2(1, Float(viewAspect / imageAspect))
-            : SIMD2(Float(imageAspect / viewAspect), 1)
-    }
 }
 
-/// Shared aspect-fit geometry so the SwiftUI overlay and the Metal display pass agree.
-enum PreviewGeometry {
-    static func fittedRect(imageSize: CGSize, in viewSize: CGSize) -> CGRect {
-        guard imageSize.width > 0, imageSize.height > 0,
-              viewSize.width > 0, viewSize.height > 0 else { return .zero }
-        let scale = min(viewSize.width / imageSize.width, viewSize.height / imageSize.height)
-        let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
-        return CGRect(x: (viewSize.width - size.width) / 2,
-                      y: (viewSize.height - size.height) / 2,
-                      width: size.width, height: size.height)
-    }
-}

@@ -56,6 +56,27 @@ struct ControlsView: View {
                 }
             }
 
+            Toggle("Fill screen", isOn: $model.fillPreview)
+                .help("Fill the view and crop the overflow, rather than fitting the whole "
+                      + "frame inside it with letterboxing.")
+
+            #if os(iOS)
+            if model.sourceMode == .camera {
+                HStack {
+                    Text("Rotation").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(model.rotationOffset)°").font(.caption.monospacedDigit())
+                    Button {
+                        model.rotationOffset = (model.rotationOffset + 90) % 360
+                    } label: {
+                        Image(systemName: "rotate.right")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+            #endif
+
             HStack {
                 Button("Open Image…", action: onOpenImage)
                 Spacer()
