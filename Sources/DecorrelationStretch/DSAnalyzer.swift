@@ -40,7 +40,13 @@ public final class DSAnalyzer {
         if partials == nil || partials!.length < needed {
             // Shared memory is free to read on unified-memory devices; discrete GPUs need
             // a managed buffer plus an explicit synchronize before the CPU can see it.
+            // Every iOS device has unified memory, and .storageModeManaged does not exist
+            // there, so that branch is compiled out rather than merely unused.
+            #if os(macOS)
             let mode: MTLResourceOptions = device.hasUnifiedMemory ? .storageModeShared : .storageModeManaged
+            #else
+            let mode: MTLResourceOptions = .storageModeShared
+            #endif
             guard let buffer = device.makeBuffer(length: needed, options: mode) else {
                 throw DSError.textureCreationFailed
             }
@@ -75,11 +81,13 @@ public final class DSAnalyzer {
         )
         encoder.endEncoding()
 
+        #if os(macOS)
         if !device.hasUnifiedMemory, let blit = commandBuffer.makeBlitCommandEncoder() {
             blit.label = "DS partials sync"
             blit.synchronize(resource: partials)
             blit.endEncoding()
         }
+        #endif
     }
 
     /// Sums the per-threadgroup partials. Only valid after the encoding command buffer

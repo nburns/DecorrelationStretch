@@ -238,7 +238,7 @@ final class RenderCoordinator: NSObject, MTKViewDelegate {
             self.textureCache.endFrame()
             self.publishDiagnostics(milliseconds: (buffer.gpuEndTime - buffer.gpuStartTime) * 1000)
             if mode == .image, !Self.matricesMatch(renderedWith, self.engine.transform.matrix) {
-                DispatchQueue.main.async { self.hostView?.needsDisplay = true }
+                DispatchQueue.main.async { self.hostView?.requestRedraw() }
             }
         }
 

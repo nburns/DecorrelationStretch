@@ -1,5 +1,7 @@
 import Metal
 import CoreGraphics
+import ImageIO
+import UniformTypeIdentifiers
 import Foundation
 
 /// Bridging between CoreGraphics images and Metal textures, for the stills path.
@@ -94,6 +96,22 @@ public enum DSImageIO {
             intent: .defaultIntent
         ) else { throw DSError.textureCreationFailed }
         return image
+    }
+}
+
+public extension DSImageIO {
+    /// PNG-encodes an image, for export paths that need bytes rather than a file.
+    static func pngData(from image: CGImage) throws -> Data {
+        let buffer = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            buffer, UTType.png.identifier as CFString, 1, nil) else {
+            throw DSError.textureCreationFailed
+        }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else {
+            throw DSError.textureCreationFailed
+        }
+        return buffer as Data
     }
 }
 

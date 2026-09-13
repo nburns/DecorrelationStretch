@@ -13,6 +13,11 @@ import DecorrelationStretch
 enum HeadlessMode {
     private(set) static var preloadURL: URL?
 
+    #if !os(macOS)
+    /// iOS has no command line to read, so this is a deliberate no-op rather than a
+    /// conditional at the call site.
+    static func runIfRequested() {}
+    #else
     static func runIfRequested() {
         let arguments = CommandLine.arguments
 
@@ -94,4 +99,5 @@ enum HeadlessMode {
             return false
         }
     }
+    #endif
 }

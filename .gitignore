@@ -19,3 +19,4 @@ Samples/revealed-*.png
 .DS_Store
 __pycache__/
 *.pyc
+App/Decorrelate/Info-iOS.plist

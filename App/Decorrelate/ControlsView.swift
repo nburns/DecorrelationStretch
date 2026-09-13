@@ -21,7 +21,13 @@ struct ControlsView: View {
             }
             .padding(16)
         }
+        #if os(macOS)
         .frame(width: 300)
+        #else
+        // In the iPhone sheet the controls should fill the width; a fixed 300pt would
+        // leave a ragged margin that shifts with device size.
+        .frame(maxWidth: .infinity)
+        #endif
     }
 
     // MARK: Source

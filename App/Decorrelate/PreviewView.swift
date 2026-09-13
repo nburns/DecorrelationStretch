@@ -1,15 +1,30 @@
 import SwiftUI
 import MetalKit
 
+extension MTKView {
+    /// `needsDisplay` is a settable AppKit property; UIKit wants a method call.
+    func requestRedraw() {
+        #if os(macOS)
+        needsDisplay = true
+        #else
+        setNeedsDisplay()
+        #endif
+    }
+}
+
 /// Hosts the MTKView and redraws on demand rather than continuously: a still image only
 /// needs a new frame when a control moves, and re-rendering a 4K source at 60fps to show
-/// an unchanged picture is wasted power.
-struct MetalPreview: NSViewRepresentable {
+/// an unchanged picture is wasted power — and on iOS, wasted battery and thermal budget.
+///
+/// The representable conformance differs between platforms but the configuration does
+/// not, so the shared work lives in `makeView`/`apply` and only the protocol plumbing is
+/// conditional.
+struct MetalPreview {
     let coordinator: RenderCoordinator
     let isLive: Bool
     let revision: Int
 
-    func makeNSView(context: Context) -> MTKView {
+    fileprivate func makeView() -> MTKView {
         let view = MTKView(frame: .zero, device: coordinator.device)
         view.delegate = coordinator
         view.colorPixelFormat = .bgra8Unorm
@@ -18,16 +33,28 @@ struct MetalPreview: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ view: MTKView, context: Context) {
+    fileprivate func apply(to view: MTKView) {
         view.isPaused = !isLive
         view.enableSetNeedsDisplay = !isLive
         if isLive {
             view.preferredFramesPerSecond = 60
         } else {
-            view.needsDisplay = true
+            view.requestRedraw()
         }
     }
 }
+
+#if os(macOS)
+extension MetalPreview: NSViewRepresentable {
+    func makeNSView(context: Context) -> MTKView { makeView() }
+    func updateNSView(_ view: MTKView, context: Context) { apply(to: view) }
+}
+#else
+extension MetalPreview: UIViewRepresentable {
+    func makeUIView(context: Context) -> MTKView { makeView() }
+    func updateUIView(_ view: MTKView, context: Context) { apply(to: view) }
+}
+#endif
 
 /// Drag to restrict the statistics to part of the frame. Coordinates are converted into
 /// source-image pixels, since that is what the analysis pass needs.
