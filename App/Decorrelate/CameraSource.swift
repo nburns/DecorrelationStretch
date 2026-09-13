@@ -1,8 +1,5 @@
 import AVFoundation
 import CoreVideo
-#if os(iOS)
-import UIKit
-#endif
 
 /// One selectable capture device.
 struct CameraDevice: Identifiable, Hashable {
@@ -20,11 +17,22 @@ final class CameraSource: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
     private var outputAttached = false
     private var requestedDeviceID: String?
 
-    /// Written on the main thread, read on `queue`. Cached rather than queried inline so
-    /// the capture path never blocks on main - a `main.sync` here would deadlock the
-    /// session the first time it ran from a main-thread caller.
+    /// Written from the rotation observer, read on `queue`. Cached rather than queried
+    /// inline so the capture path never blocks on main - a `main.sync` here would
+    /// deadlock the session the first time it ran from a main-thread caller.
     private let angleLock = NSLock()
     private var cachedAngle: CGFloat = 90
+
+    #if os(iOS)
+    /// AVFoundation's own answer to "which way is up". Hand-rolling this from
+    /// UIDevice.orientation does not work: that property reports .unknown unless
+    /// beginGeneratingDeviceOrientationNotifications() has been called, and
+    /// UIDeviceOrientation.landscapeLeft is the opposite of
+    /// UIInterfaceOrientation.landscapeLeft, so the obvious mapping is inverted. The
+    /// coordinator also accounts for the sensor's own mounting per device.
+    private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
+    private var rotationObservation: NSKeyValueObservation?
+    #endif
 
     var onFrame: ((CVPixelBuffer) -> Void)?
     /// Carries both failures and plain status, e.g. which device is now live.
@@ -35,12 +43,6 @@ final class CameraSource: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
 
     override init() {
         super.init()
-        #if os(iOS)
-        cachedAngle = Self.rotationAngle()
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(orientationChanged),
-            name: UIDevice.orientationDidChangeNotification, object: nil)
-        #endif
     }
 
     // MARK: - Discovery
@@ -141,6 +143,10 @@ final class CameraSource: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
         }
         session.addInput(input)
         currentInput = input
+        #if os(iOS)
+        // The coordinator is per-device, so it is rebuilt on every camera switch.
+        observeRotation(for: device)
+        #endif
 
         if !outputAttached {
             output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
@@ -174,9 +180,9 @@ final class CameraSource: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
 
     // MARK: - Orientation
 
-    /// Sensor buffers arrive in the camera's native landscape orientation, so on a phone
-    /// they have to be rotated to match how the device is being held. Handled here rather
-    /// than in the shader so the filter never has to know about device orientation.
+    /// Sensor buffers arrive in the camera's native landscape orientation, so they have
+    /// to be rotated to match how the device is being held. Applied to the connection
+    /// rather than in the shader, so the filter never has to know about orientation.
     private func applyRotation() {
         #if os(iOS)
         guard let connection = output.connection(with: .video) else { return }
@@ -190,20 +196,21 @@ final class CameraSource: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
     }
 
     #if os(iOS)
-    @objc private func orientationChanged() {
-        let angle = Self.rotationAngle()      // notification is delivered on main
-        angleLock.lock()
-        cachedAngle = angle
-        angleLock.unlock()
-        queue.async { [weak self] in self?.applyRotation() }
-    }
-
-    private static func rotationAngle() -> CGFloat {
-        switch UIDevice.current.orientation {
-        case .landscapeLeft: return 180
-        case .landscapeRight: return 0
-        case .portraitUpsideDown: return 270
-        default: return 90
+    /// `videoRotationAngleForHorizonLevelPreview` is the angle that keeps a preview
+    /// upright while the interface rotates with the device, which is exactly this case.
+    /// Observed rather than polled, so rotation is followed without a notification dance.
+    private func observeRotation(for device: AVCaptureDevice) {
+        let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: nil)
+        rotationCoordinator = coordinator
+        rotationObservation = coordinator.observe(
+            \.videoRotationAngleForHorizonLevelPreview, options: [.initial, .new]
+        ) { [weak self] coordinator, _ in
+            guard let self else { return }
+            let angle = coordinator.videoRotationAngleForHorizonLevelPreview
+            self.angleLock.lock()
+            self.cachedAngle = angle
+            self.angleLock.unlock()
+            self.queue.async { self.applyRotation() }
         }
     }
     #endif

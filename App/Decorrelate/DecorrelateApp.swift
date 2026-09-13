@@ -171,7 +171,14 @@ struct ContentView: View {
         }
         host.coordinator.onStatus = { model.status = $0 }
         host.coordinator.onSourceSize = { size in
-            if model.sourceSize != size { model.sourceSize = size }
+            guard model.sourceSize != size else { return }
+            // Rotating swaps the buffer's width and height, and the region of interest is
+            // stored in source pixels - so a selection made in portrait would point at the
+            // wrong part of a landscape frame. Drop it rather than silently mis-measure.
+            if model.sourceSize != .zero, model.regionOfInterest != nil {
+                model.regionOfInterest = nil
+            }
+            model.sourceSize = size
         }
         host.coordinator.onDevices = { devices in
             model.cameras = devices
