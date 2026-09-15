@@ -82,22 +82,6 @@ struct ContentView: View {
             }
             return true
         }
-        .fileImporter(isPresented: $importing, allowedContentTypes: [.image]) { result in
-            switch result {
-            case .success(let url): load(url)
-            case .failure(let error): model.status = "Could not open: \(error.localizedDescription)"
-            }
-        }
-        .fileExporter(isPresented: $exporting,
-                      document: exportDocument,
-                      contentType: .png,
-                      defaultFilename: "stretched") { result in
-            switch result {
-            case .success(let url): model.status = "Saved \(url.lastPathComponent)."
-            case .failure(let error): model.status = "Could not save: \(error.localizedDescription)"
-            }
-            exportDocument = nil
-        }
     }
 
     // MARK: - Layouts
@@ -106,7 +90,7 @@ struct ContentView: View {
         HStack(spacing: 0) {
             preview
             Divider()
-            ControlsView(model: model, onOpenImage: { importing = true }, onExport: exportImage)
+            controls
         }
     }
 
@@ -131,15 +115,23 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $showingControls) {
-                ControlsView(model: model,
-                             onOpenImage: { importing = true },
-                             onExport: exportImage)
+                controls
                     .presentationDetents([.height(260), .large])
                     .presentationBackgroundInteraction(.enabled(upThrough: .large))
                     .presentationDragIndicator(.visible)
             }
     }
     #endif
+
+    private var controls: some View {
+        ControlsView(model: model,
+                     importing: $importing,
+                     exporting: $exporting,
+                     exportDocument: $exportDocument,
+                     onOpenImage: { importing = true },
+                     onExport: exportImage,
+                     onImported: load)
+    }
 
     private var preview: some View {
         ZStack {
@@ -214,6 +206,8 @@ struct ContentView: View {
         model.regionOfInterest = nil
         host.coordinator.loadImage(url: url)
         push()
+        // On iPhone the controls sheet is covering the preview that just changed.
+        showingControls = false
     }
 
     private func exportImage() {

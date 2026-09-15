@@ -1,10 +1,15 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import DecorrelationStretch
 
 struct ControlsView: View {
     @ObservedObject var model: FilterModel
+    @Binding var importing: Bool
+    @Binding var exporting: Bool
+    @Binding var exportDocument: PNGDocument?
     var onOpenImage: () -> Void
     var onExport: () -> Void
+    var onImported: (URL) -> Void
 
     var body: some View {
         ScrollView {
@@ -28,6 +33,25 @@ struct ControlsView: View {
         // leave a ragged margin that shifts with device size.
         .frame(maxWidth: .infinity)
         #endif
+        // Attached here rather than on the root view: on iPhone these controls are inside
+        // a sheet, and SwiftUI will not present a second sheet from the covered view
+        // behind it - the picker just silently never appears.
+        .fileImporter(isPresented: $importing, allowedContentTypes: [.image]) { result in
+            switch result {
+            case .success(let url): onImported(url)
+            case .failure(let error): model.status = "Could not open: \(error.localizedDescription)"
+            }
+        }
+        .fileExporter(isPresented: $exporting,
+                      document: exportDocument,
+                      contentType: .png,
+                      defaultFilename: "stretched") { result in
+            switch result {
+            case .success(let url): model.status = "Saved \(url.lastPathComponent)."
+            case .failure(let error): model.status = "Could not save: \(error.localizedDescription)"
+            }
+            exportDocument = nil
+        }
     }
 
     // MARK: Source
